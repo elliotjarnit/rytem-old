@@ -411,7 +411,7 @@ class Music(commands.Cog):
             total_votes = len(ctx.voice_state.skip_votes)
 
             if total_votes >= skip_count:
-                 await ctx.send('**{0}/{1}**'.format(total_votes, skip_count))
+                await ctx.send('**{0}/{1}**'.format(total_votes, skip_count))
                 await ctx.send('Skipping...')
                 await ctx.message.add_reaction('?')
                 ctx.voice_state.skip()
