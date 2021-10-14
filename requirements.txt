@@ -1,3 +1,3 @@
-yt_dlp
 discord
 PyNaCl
+yt_dlp

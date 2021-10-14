@@ -98,7 +98,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
     @classmethod
     async def create_source(cls, ctx: commands.Context, search: str, *, loop: asyncio.BaseEventLoop = None):
-        loop = loop or asyncio.get_event_loop()
 
         partial = functools.partial(cls.ytdl.extract_info, search, download=False, process=False)
         data = await loop.run_in_executor(None, partial)
@@ -205,9 +204,6 @@ class SongQueue(asyncio.Queue):
     def clear(self):
         self._queue.clear()
 
-    def shuffle(self):
-        random.shuffle(self._queue)
-
     def remove(self, index: int):
         del self._queue[index]
 
@@ -222,30 +218,12 @@ class VoiceState:
         self.next = asyncio.Event()
         self.songs = SongQueue()
 
-        self._loop = False
-        self._volume = 0.5
         self.skip_votes = set()
 
         self.audio_player = bot.loop.create_task(self.audio_player_task(ctx))
 
     def __del__(self):
         self.audio_player.cancel()
-
-    @property
-    def loop(self):
-        return self._loop
-
-    @loop.setter
-    def loop(self, value: bool):
-        self._loop = value
-
-    @property
-    def volume(self):
-        return self._volume
-
-    @volume.setter
-    def volume(self, value: float):
-        self._volume = value
 
     @property
     def is_playing(self):
@@ -255,19 +233,18 @@ class VoiceState:
         while True:
             self.next.clear()
 
-            if not self.loop:
-                try:
-                    async with timeout(999999999999999999):
-                        self.current = await self.songs.get()
-                except asyncio.TimeoutError:
-                    self.songs.clear()
+            try:
+                async with timeout(999999999999999999):
+                    self.current = await self.songs.get()
+            except asyncio.TimeoutError:
+                self.songs.clear()
 
-                    if self.voice:
-                        await self.voice.disconnect()
-                        self.voice = None
-                    return
+                if self.voice:
+                    await self.voice.disconnect()
+                    self.voice = None
+                return
 
-            self.current.source.volume = self._volume
+            self.current.source.volume = 0.5
             self.voice.play(self.current.source, after=self.play_next_song)
             await self.current.source.channel.send(embed=self.current.create_embed(0))
             await self.next.wait()
@@ -316,34 +293,9 @@ class Music(commands.Cog):
 
         return True
 
+    # Runs right before you do a command. Useful for updating variables
     async def cog_before_invoke(self, ctx: commands.Context):
         ctx.voice_state = self.get_voice_state(ctx)
-
-    async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
-        await ctx.send('{}'.format(str(error)))
-        await ctx.message.add_reaction('\u1f412')
-
-    @commands.command(name='join', invoke_without_subcommand=True)
-    async def _join(self, ctx: commands.Context):
-
-        destination = ctx.author.voice.channel
-        if ctx.voice_state.voice:
-            await ctx.voice_state.voice.move_to(destination)
-            return
-
-        ctx.voice_state.voice = await destination.connect()
-
-    @commands.command(name='summon')
-    @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
-    async def _summon(self, ctx: commands.Context, *, channel: discord.VoiceChannel = None):
-        if not channel and not ctx.author.voice:
-            raise VoiceError('You are neither connected to a voice channel nor specified a channel to join.')
-        destination = channel or ctx.author.voice.channel
-        if ctx.voice_state.voice:
-            await ctx.voice_state.voice.move_to(destination)
-            return
-
-        ctx.voice_state.voice = await destination.connect()
 
     @commands.command(name='leave', aliases=['disconnect'])
     async def _leave(self, ctx: commands.Context):
@@ -352,18 +304,6 @@ class Music(commands.Cog):
 
         await ctx.voice_state.stop()
         del self.voice_states[ctx.guild.id]
-
-    @commands.command(name='volume')
-    async def _volume(self, ctx: commands.Context, *, volume: int):
-
-        if not ctx.voice_state.is_playing:
-            return await ctx.send('Nothing being played at the moment.')
-
-        if 0 > volume > 100:
-            return await ctx.send('Volume must be between 0 and 100')
-
-        ctx.voice_state.volume = volume / 100
-        await ctx.send('Volume of the player set to {}%'.format(volume))
 
     @commands.command(name='now', aliases=['current', 'playing'])
     async def _now(self, ctx: commands.Context):
@@ -384,16 +324,6 @@ class Music(commands.Cog):
 
         if not ctx.voice_state.is_playing and ctx.voice_state.voice.is_paused():
             ctx.voice_state.voice.resume()
-            await ctx.message.add_reaction('\u2705')
-
-    @commands.command(name='stop')
-    @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
-    async def _stop(self, ctx: commands.Context):
-
-        ctx.voice_state.songs.clear()
-
-        if not ctx.voice_state.is_playing:
-            ctx.voice_state.voice.stop()
             await ctx.message.add_reaction('\u2705')
 
     @commands.command(name='skip', aliases=['s'])
@@ -423,7 +353,6 @@ class Music(commands.Cog):
         else:
             await ctx.send('U already voted fat monkey')
 
-
     @commands.command(name='forceskip', aliases=['fs'])
     async def _forceskip(self, ctx: commands.Context):
         role = discord.utils.get(ctx.guild.roles, name="DJ")
@@ -452,22 +381,12 @@ class Music(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
-    @commands.command(name='shuffle')
-    async def _shuffle(self, ctx: commands.Context):
-
-        if len(ctx.voice_state.songs) == 0:
-            return await ctx.send('Theres nothing in the queue monkey.')
-
-        ctx.voice_state.songs.shuffle()
-        await ctx.message.add_reaction('\u1f500')
-
-    @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
     @commands.command(name='remove')
     async def _remove(self, ctx: commands.Context, index: int):
 
         if len(ctx.voice_state.songs) == 0:
-            return await ctx.send('Theres nothing in the queue monkey.')
-            await ctx.message.add_reaction('\u1f412')
+            await ctx.send('Theres nothing in the queue monkey.')
+            return await ctx.message.add_reaction('\u1f412')
 
         ctx.voice_state.songs.remove(index - 1)
         await ctx.message.add_reaction('\u2705')
@@ -482,22 +401,19 @@ class Music(commands.Cog):
         # ctx.voice_state.loop = not ctx.voice_state.loop
         # await ctx.message.add_reaction('?')
 
-    @commands.command(name='mutewestley')
-    @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
-    async def _mutewestley(self, ctx: commands.Context):
-        westley = ctx.guild.fetch_member(220968952979783680)
-        if self.muted == False:
-            westley.edit(mute=True)
-            self.muted = True
-        else:
-            westley.edit(mute=False)
-            self.muted = False
+    @commands.command(name='help', aliases=['h'])
+    async def _help(self, ctx: commands.Context):
+        await ctx.send(embed=discord.Embed(title='Help', color=discord.Color.blurple(), description="```!play {url or search}```\n**Plays a song**\n\n```!skip```\n**Vote to skip the current song**\n\n```!forceskip```\n**Force-skip the current song (requires DJ role)**\n\n```!queue```\n**View the queue**\n\n```!remove {queue number}```\n**Removes the stated song from the queue**"))
 
     @commands.command(name='play', aliases=['p'])
     async def _play(self, ctx: commands.Context, *, search: str):
         if not ctx.voice_state.voice:
-            await ctx.invoke(self._join)
-            print(len(ctx.voice_client.channel.members))
+            destination = ctx.author.voice.channel
+            if ctx.voice_state.voice:
+                await ctx.voice_state.voice.move_to(destination)
+                return
+
+            ctx.voice_state.voice = await destination.connect()
         if ctx.voice_client:
             if ctx.voice_client.channel != ctx.author.voice.channel:
                 if len(ctx.voice_client.channel.members) == 1:
@@ -570,7 +486,6 @@ class Music(commands.Cog):
                                         .set_thumbnail(url=source.thumbnail))
                             await ctx.send(embed=theEmbed)
 
-    @_join.before_invoke
     @_play.before_invoke
     async def ensure_voice_state(self, ctx: commands.Context):
         if not ctx.author.voice or not ctx.author.voice.channel:
@@ -578,25 +493,13 @@ class Music(commands.Cog):
 
 
 bot = commands.Bot('!', description='L')
+bot.remove_command('help')
 bot.add_cog(Music(bot))
 
-not_fax = ["Elliot sucks", "Elliot smells", "Elliot is gay", "Shut up elliot", "stfu elliot", "shut up rytem",
-           "stfu rytem"]
-
-
-# @bot.event
-# async def on_message(message):
-#    if message.author.id == 220968952979783680:
-#        if not_fax in str(message.content).lower():
-#            print("Not Fax Westley")
-#        else:
-#            await message.add_reaction('\u1f4e0')
-#            await message.channel.send('Fax Westley')
 
 @bot.event
 async def on_ready():
     print('Logged in as:\n{0.user.name}\n{0.user.id}'.format(bot))
     await bot.change_presence(activity=discord.Game("Made by Swiftzerr"))
-
 
 bot.run('NzU1ODUwMzk0NTc5NTAxMTU5.X2JSiQ.X0kCbDgZV3t2VwwJ5OpASU0M2xY')
