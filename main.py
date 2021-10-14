@@ -3,8 +3,6 @@ import functools
 import itertools
 import math
 import random
-import datetime
-import time
 import discord
 import yt_dlp
 from async_timeout import timeout
@@ -15,25 +13,29 @@ print("Starting...")
 with open('phrases.txt', 'r') as f:
     phrases = [line.strip() for line in f]
 
+
 def RanPhase():
     return random.choice(phrases)
 
 
-ownerid1 = 539965252897472523
-ownerid2 = 866392964079026188
+owner_id_1 = 539965252897472523
+owner_id_2 = 866392964079026188
+
 
 def check_if_it_is_me1():
     def predicate(ctx):
-        return ctx.author.id == ownerid1
+        return ctx.author.id == owner_id_1
+
     return commands.check(predicate)
 
 
 def check_if_it_is_me2():
     def predicate(ctx):
-        return ctx.author.id == ownerid2
+        return ctx.author.id == owner_id_2
+
     return commands.check(predicate)
 
-# Silence useless bug reports messages
+
 yt_dlp.utils.bug_reports_message = lambda: ''
 
 
@@ -255,11 +257,14 @@ class VoiceState:
 
             if not self.loop:
                 try:
-                    async with timeout(3000):
+                    async with timeout(999999999999999999):
                         self.current = await self.songs.get()
                 except asyncio.TimeoutError:
-                    await ctx.voice_state.stop()
-                    del self.voice_states[ctx.guild.id]
+                    self.songs.clear()
+
+                    if self.voice:
+                        await self.voice.disconnect()
+                        self.voice = None
                     return
 
             self.current.source.volume = self._volume
@@ -314,7 +319,6 @@ class Music(commands.Cog):
     async def cog_before_invoke(self, ctx: commands.Context):
         ctx.voice_state = self.get_voice_state(ctx)
 
-
     async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         await ctx.send('{}'.format(str(error)))
         await ctx.message.add_reaction('\u1f412')
@@ -328,6 +332,7 @@ class Music(commands.Cog):
             return
 
         ctx.voice_state.voice = await destination.connect()
+
     @commands.command(name='summon')
     @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
     async def _summon(self, ctx: commands.Context, *, channel: discord.VoiceChannel = None):
@@ -342,7 +347,6 @@ class Music(commands.Cog):
 
     @commands.command(name='leave', aliases=['disconnect'])
     async def _leave(self, ctx: commands.Context):
-        """Clears the queue and leaves the voice channel."""
         if not ctx.voice_state.voice:
             return await ctx.send('Yo retard. Im not in a vc.')
 
@@ -351,7 +355,6 @@ class Music(commands.Cog):
 
     @commands.command(name='volume')
     async def _volume(self, ctx: commands.Context, *, volume: int):
-        """Sets the volume of the player."""
 
         if not ctx.voice_state.is_playing:
             return await ctx.send('Nothing being played at the moment.')
@@ -393,17 +396,18 @@ class Music(commands.Cog):
             ctx.voice_state.voice.stop()
             await ctx.message.add_reaction('\u2705')
 
-
     @commands.command(name='skip', aliases=['s'])
     async def _skip(self, ctx: commands.Context):
 
+        members = len(ctx.voice_client.channel.voice_states)
+
         if not ctx.voice_state.is_playing:
             return await ctx.send('Nothing is playing retard')
-        if ctx.voice_state.voice:
-            if len(ctx.voice_client.channel.members) == 1 or len(ctx.voice_client.channel.members) == 2:
+        elif ctx.voice_state.voice:
+            if members == 1 or members == 2 or members == 3:
                 skip_count = 1
             else:
-                skip_count = int(len(ctx.voice_client)) - 2
+                skip_count = members - 3
 
         voter = ctx.message.author
         if voter.id not in ctx.voice_state.skip_votes:
@@ -413,17 +417,21 @@ class Music(commands.Cog):
             if total_votes >= skip_count:
                 await ctx.send('**{0}/{1}**'.format(total_votes, skip_count))
                 await ctx.send('Skipping...')
-                await ctx.message.add_reaction('?')
                 ctx.voice_state.skip()
             else:
                 await ctx.send('Skip vote added, currently at **{0}/{1}**'.format(total_votes, skip_count))
         else:
-            await ctx.send('U already voted fat retard')
+            await ctx.send('U already voted fat monkey')
+
 
     @commands.command(name='forceskip', aliases=['fs'])
     async def _forceskip(self, ctx: commands.Context):
-        ctx.voice_state.skip()
-        await ctx.message.add_reaction('\u2705')
+        role = discord.utils.get(ctx.guild.roles, name="DJ")
+        if role in ctx.author.roles:
+            ctx.voice_state.skip()
+            await ctx.message.add_reaction('\u2705')
+        else:
+            await ctx.channel.send('No perms lol')
 
     @commands.command(name='queue')
     async def _queue(self, ctx: commands.Context, *, page: int = 1):
@@ -446,7 +454,6 @@ class Music(commands.Cog):
     @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
     @commands.command(name='shuffle')
     async def _shuffle(self, ctx: commands.Context):
-        """Shuffles the queue."""
 
         if len(ctx.voice_state.songs) == 0:
             return await ctx.send('Theres nothing in the queue monkey.')
@@ -457,7 +464,6 @@ class Music(commands.Cog):
     @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
     @commands.command(name='remove')
     async def _remove(self, ctx: commands.Context, index: int):
-        """Removes a song from the queue at a given index."""
 
         if len(ctx.voice_state.songs) == 0:
             return await ctx.send('Theres nothing in the queue monkey.')
@@ -469,12 +475,12 @@ class Music(commands.Cog):
     @commands.command(name='loop')
     async def _loop(self, ctx: commands.Context):
         await ctx.send("I don't know why but this is broken. Ima fix it soon enough don't worry.")
-        #if not ctx.voice_state.is_playing:
+        # if not ctx.voice_state.is_playing:
         #    return await ctx.send('Listen retard, can you not hear that no music is playing. How slow are you?')
         #    await ctx.message.add_reaction('??')
 
-        #ctx.voice_state.loop = not ctx.voice_state.loop
-        #await ctx.message.add_reaction('?')
+        # ctx.voice_state.loop = not ctx.voice_state.loop
+        # await ctx.message.add_reaction('?')
 
     @commands.command(name='mutewestley')
     @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
@@ -549,6 +555,7 @@ class Music(commands.Cog):
                         supervar = str(ctx.voice_state.songs).find("_getters")
                         song = Song(source)
                         await ctx.voice_state.songs.put(song)
+                        print(len(ctx.voice_state.songs))
                         if supervar == -1:
                             fixedURL = source.url.split("https://")[1].split("/")[0]
                             theEmbed = (discord.Embed(title='Queued song',
@@ -569,13 +576,16 @@ class Music(commands.Cog):
         if not ctx.author.voice or not ctx.author.voice.channel:
             raise commands.CommandError('You are not in a call bozo. L + Ratio')
 
+
 bot = commands.Bot('!', description='L')
 bot.add_cog(Music(bot))
 
-not_fax = ["Elliot sucks", "Elliot smells", "Elliot is gay", "Shut up elliot", "stfu elliot", "shut up rytem", "stfu rytem"]
+not_fax = ["Elliot sucks", "Elliot smells", "Elliot is gay", "Shut up elliot", "stfu elliot", "shut up rytem",
+           "stfu rytem"]
 
-#@bot.event
-#async def on_message(message):
+
+# @bot.event
+# async def on_message(message):
 #    if message.author.id == 220968952979783680:
 #        if not_fax in str(message.content).lower():
 #            print("Not Fax Westley")
@@ -587,5 +597,6 @@ not_fax = ["Elliot sucks", "Elliot smells", "Elliot is gay", "Shut up elliot", "
 async def on_ready():
     print('Logged in as:\n{0.user.name}\n{0.user.id}'.format(bot))
     await bot.change_presence(activity=discord.Game("Made by Swiftzerr"))
+
 
 bot.run('NzU1ODUwMzk0NTc5NTAxMTU5.X2JSiQ.X0kCbDgZV3t2VwwJ5OpASU0M2xY')
