@@ -46,12 +46,12 @@ def check_if_it_is_me2():
     return commands.check(predicate)
 
 
-def addSongDatabase(song_name, requester_name):
-    mycursor.execute("INSERT INTO songs (song, requester) VALUES (%s, %s)", (song_name, requester_name))
+def addSongDatabase(song_name, requester_id, requester_name):
+    mycursor.execute("INSERT INTO songs (song, requester_id, requester_name) VALUES (%s, %s, %s)", (song_name, requester_id, requester_name))
 
     mydb.commit()
 
-    print(mycursor.rowcount, "inserted in database")
+    print("\nAdded values to Database\nSong Name: " + song_name + "\nRequester ID: " + requester_id + "\nRequester Name: " + requester_name)
 
 yt_dlp.utils.bug_reports_message = lambda: ""
 
@@ -453,7 +453,7 @@ class Music(commands.Cog):
                             supervar = str(ctx.voice_state.songs).find("_getters")
                             song = Song(source)
                             await ctx.voice_state.songs.put(song)
-                            addSongDatabase(source.title, source.requester.name)
+                            addSongDatabase(source.title, source.requester.id, source.requester.name)
                             if supervar == -1:
                                 fixedURL = source.url.split("https://")[1].split("/")[0]
                                 theEmbed = (discord.Embed(title="Queued song",
@@ -488,7 +488,7 @@ class Music(commands.Cog):
                         supervar = str(ctx.voice_state.songs).find("_getters")
                         song = Song(source)
                         await ctx.voice_state.songs.put(song)
-                        addSongDatabase(source.title, source.requester.name)
+                        addSongDatabase(source.title, source.requester.id, source.requester.name)
                         if supervar == -1:
                             fixedURL = source.url.split("https://")[1].split("/")[0]
                             theEmbed = (discord.Embed(title="Queued song",
