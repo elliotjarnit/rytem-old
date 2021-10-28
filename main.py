@@ -51,7 +51,7 @@ def addSongDatabase(song_name, requester_id, requester_name):
 
     mydb.commit()
 
-    print("\nAdded values to Database\nSong Name: " + song_name + "\nRequester ID: " + requester_id + "\nRequester Name: " + requester_name)
+    print("\nAdded values to Database\nSong Name: " + song_name + "\nRequester ID: " + str(requester_id) + "\nRequester Name: " + requester_name)
 
 yt_dlp.utils.bug_reports_message = lambda: ""
 
