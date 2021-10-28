@@ -47,7 +47,7 @@ def check_if_it_is_me2():
 
 
 def addSongDatabase(song_name, requester_id, requester_name):
-    mycursor.execute("INSERT INTO songs (song, requester_id, requester_name) VALUES (%s, %s, %s)", (song_name, requester_id, requester_name))
+    mycursor.execute("INSERT INTO songs (song, requester_id, requester_name) VALUES (%s, %s, %s)", (song_name, str(requester_id), requester_name))
 
     mydb.commit()
 
