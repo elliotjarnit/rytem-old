@@ -1,3 +1,4 @@
 discord
 PyNaCl
 yt_dlp
+mysql-connector-python

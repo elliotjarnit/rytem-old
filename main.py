@@ -7,7 +7,16 @@ import discord
 import yt_dlp
 from async_timeout import timeout
 from discord.ext import commands
-import json
+import mysql.connector
+
+mydb = mysql.connector.connect(
+  host="na05-sql.pebblehost.com",
+  user="customer_222209_songs",
+  password="WazzyFangIsBad123!",
+  database="customer_222209_songs"
+)
+
+mycursor = mydb.cursor()
 
 print("Starting...")
 
@@ -36,6 +45,13 @@ def check_if_it_is_me2():
 
     return commands.check(predicate)
 
+
+def addSongDatabase(song_name, requester_name):
+    mycursor.execute("INSERT INTO songs (song, requester) VALUES (%s, %s)", (song_name, requester_name))
+
+    mydb.commit()
+
+    print(mycursor.rowcount, "inserted in database")
 
 yt_dlp.utils.bug_reports_message = lambda: ""
 
@@ -274,9 +290,6 @@ class Music(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.voice_states = {}
-        file = open("settings.json", "r")
-        self.loaded_file = json.load(file)
-        file.close()
 
     def get_voice_state(self, ctx: commands.Context):
         state = self.voice_states.get(ctx.guild.id)
@@ -291,38 +304,14 @@ class Music(commands.Cog):
             self.bot.loop.create_task(state.stop())
 
     def cog_check(self, ctx: commands.Context):
-        try:
-            ctx.allowed_channel
-        except:
-            ctx.allowed_channel = "None"
         if not ctx.guild:
             raise commands.NoPrivateMessage("This command can\'t be used in DM channels.")
-        if ctx.allowed_channel != "None" and ctx.author.channel != ctx.allowed_channel:
-            raise commands.NoPrivateMessage("This command cannot be used in this channel")
 
         return True
 
     # Runs right before you do a command. Useful for updating variables
     async def cog_before_invoke(self, ctx: commands.Context):
-        if not(str(ctx.guild.id) in self.loaded_file):
-            file = open("settings.json", "w")
-            self.loaded_file[str(ctx.guild.id)] = {"channel": "None"}
-            file.write(str(json.dumps(self.loaded_file, indent=4)))
-            file.close()
-        file = open("settings.json", "w")
-        loaded_file = json.load(file)
-        ctx.allowed_channel = loaded_file["channel"]
-        file.close()
         ctx.voice_state = self.get_voice_state(ctx)
-
-
-    @commands.command(name="setchannel")
-    @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
-    async def _setchannel(self, ctx: commands.Context, channel: str):
-        file = open("settings.json", "w")
-        self.loaded_file[str(ctx.guild.id)]["channel"] = channel
-        file.write(str(json.dumps(self.loaded_file, indent=4)))
-        file.close()
 
     @commands.command(name="leave", aliases=["disconnect"])
     async def _leave(self, ctx: commands.Context):
@@ -338,6 +327,7 @@ class Music(commands.Cog):
         await ctx.send(embed=ctx.voice_state.current.create_embed(1))
 
     @commands.command(name="pause")
+    @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
     async def _pause(self, ctx: commands.Context):
 
         if not ctx.voice_state.is_playing and ctx.voice_state.voice.is_playing():
@@ -345,6 +335,7 @@ class Music(commands.Cog):
             await ctx.message.add_reaction("\u2705")
 
     @commands.command(name="resume")
+    @commands.check_any(commands.has_permissions(manage_guild=True), check_if_it_is_me1(), check_if_it_is_me2())
     async def _resume(self, ctx: commands.Context):
 
         if not ctx.voice_state.is_playing and ctx.voice_state.voice.is_paused():
@@ -462,6 +453,7 @@ class Music(commands.Cog):
                             supervar = str(ctx.voice_state.songs).find("_getters")
                             song = Song(source)
                             await ctx.voice_state.songs.put(song)
+                            addSongDatabase(source.title, source.requester.name)
                             if supervar == -1:
                                 fixedURL = source.url.split("https://")[1].split("/")[0]
                                 theEmbed = (discord.Embed(title="Queued song",
@@ -496,7 +488,7 @@ class Music(commands.Cog):
                         supervar = str(ctx.voice_state.songs).find("_getters")
                         song = Song(source)
                         await ctx.voice_state.songs.put(song)
-                        print(len(ctx.voice_state.songs))
+                        addSongDatabase(source.title, source.requester.name)
                         if supervar == -1:
                             fixedURL = source.url.split("https://")[1].split("/")[0]
                             theEmbed = (discord.Embed(title="Queued song",
@@ -517,7 +509,7 @@ class Music(commands.Cog):
             raise commands.CommandError("You are not in a call bozo. L + Ratio")
 
 
-bot = commands.Bot("!")
+bot = commands.Bot("!", description="L")
 bot.remove_command("help")
 bot.add_cog(Music(bot))
 
