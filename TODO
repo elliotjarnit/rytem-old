@@ -7,3 +7,5 @@
 - Native playlist support using database
 
 - Phrases in database
+
+- Fix force disconnect bug
