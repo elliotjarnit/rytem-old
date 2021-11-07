@@ -2,28 +2,32 @@ import asyncio
 import functools
 import itertools
 import math
+import os.path
 import random
 import discord
 import yt_dlp
 from async_timeout import timeout
 from discord.ext import commands
 import mysql.connector
-
-mydb = mysql.connector.connect(
-  host="na05-sql.pebblehost.com",
-  user="customer_222209_songs",
-  password="WazzyFangIsBad123!",
-  database="customer_222209_songs"
-)
-
-mycursor = mydb.cursor()
+from os.path import exists
+import json
 
 print("Starting...")
 
 with open("phrases.txt", "r") as f:
     phrases = [line.strip() for line in f]
 
-
+def get_prefix(bot, message):
+    config = "configs/" + str(message.guild.id) + ".json"
+    if exists(config):
+        with open(config, 'r') as f: ##we open and read the prefixes.json, assuming it's in the same file
+            loaded = json.load(f) #load the json as prefixes
+        return loaded["prefix"]
+    else:
+        default_config = {'prefix': '!', 'channel': 'None'}
+        with open(config, "w") as file:
+            json.dump(default_config, file, sort_keys=True, indent=4)
+        return default_config["prefix"]
 def RanPhase():
     return random.choice(phrases)
 
@@ -47,11 +51,21 @@ def check_if_it_is_me2():
 
 
 def addSongDatabase(song_name, requester_id, requester_name):
+    mydb = mysql.connector.connect(
+        host="na05-sql.pebblehost.com",
+        user="customer_222209_songs",
+        password="WazzyFangIsBad123!",
+        database="customer_222209_songs"
+    )
+
+    mycursor = mydb.cursor()
+
     mycursor.execute("INSERT INTO songs (song, requester_id, requester_name) VALUES (%s, %s, %s)", (song_name, str(requester_id), requester_name))
 
     mydb.commit()
+    mydb.close()
 
-    print("\nAdded values to Database\nSong Name: " + song_name + "\nRequester ID: " + str(requester_id) + "\nRequester Name: " + requester_name)
+    print("\n\nAdded values to Database\nSong Name: " + song_name + "\nRequester ID: " + str(requester_id) + "\nRequester Name: " + requester_name)
 
 yt_dlp.utils.bug_reports_message = lambda: ""
 
@@ -309,6 +323,7 @@ class Music(commands.Cog):
 
         return True
 
+
     # Runs right before you do a command. Useful for updating variables
     async def cog_before_invoke(self, ctx: commands.Context):
         ctx.voice_state = self.get_voice_state(ctx)
@@ -369,6 +384,14 @@ class Music(commands.Cog):
         else:
             await ctx.send("U already voted fat monkey")
 
+#    @commands.command(name="settings")
+#    async def _settings(self, ctx: commands.Context,  setting: str, value="none"):
+#        if setting == "prefix":
+#            if value == "none":
+#                print("Must specify a prefix!")
+#            else:
+
+
     @commands.command(name="forceskip", aliases=["fs"])
     async def _forceskip(self, ctx: commands.Context):
         role = discord.utils.get(ctx.guild.roles, name="DJ")
@@ -377,6 +400,43 @@ class Music(commands.Cog):
             await ctx.message.add_reaction("\u2705")
         else:
             await ctx.channel.send("No perms lol")
+
+    @commands.command(name="leaderboard")
+    async def _leaderboard(self, ctx: commands.Context):
+        mydb = mysql.connector.connect(
+            host="na05-sql.pebblehost.com",
+            user="customer_222209_songs",
+            password="WazzyFangIsBad123!",
+            database="customer_222209_songs"
+        )
+
+        mycursor = mydb.cursor()
+
+        mycursor.execute("SELECT song, count(*) as SameValue from songs GROUP BY song;")
+        leaderboardsongs = mycursor.fetchall()
+        mydb.close()
+        leaderboardsongs.sort(key=lambda x: x[1])
+        leaderboardsongs.reverse()
+
+        fixedlist = []
+        i = 1
+        daword = ""
+        for songs in leaderboardsongs:
+            if len(songs[0]) > 50:
+                fixedsong = songs[0][:50] + "..."
+            else:
+                fixedsong = songs[0]
+
+            if songs[1] == 1:
+                times = " time"
+            else:
+                times = " times"
+            daword += "**" + str(i) + ")** `" + fixedsong + "` - **" + str(songs[1]) + times + "**\n"
+            if i > 9:
+                break
+            i = i + 1
+
+        await ctx.send(embed=(discord.Embed(title="**Top 10 Most Played Songs**", description=(daword))))
 
     @commands.command(name="queue")
     async def _queue(self, ctx: commands.Context, *, page: int = 1):
@@ -421,7 +481,7 @@ class Music(commands.Cog):
     async def _help(self, ctx: commands.Context):
         await ctx.send(embed=discord.Embed(title="Help", color=discord.Color.blurple(), description="```!play {url or search}```\n**Plays a song**\n\n```!skip```\n**Vote to skip the current song**\n\n```!forceskip```\n**Force-skip the current song (requires DJ role)**\n\n```!queue```\n**View the queue**\n\n```!remove {queue number}```\n**Removes the stated song from the queue**"))
 
-    @commands.command(name="play", aliases=["p"])
+    @commands.command(name="play", aliases=["p", "cock"])
     async def _play(self, ctx: commands.Context, *, search: str):
         if not ctx.voice_state.voice:
             destination = ctx.author.voice.channel
@@ -509,14 +569,23 @@ class Music(commands.Cog):
             raise commands.CommandError("You are not in a call bozo. L + Ratio")
 
 
-bot = commands.Bot("!", description="L")
+bot = commands.Bot(command_prefix=(get_prefix),)
 bot.remove_command("help")
 bot.add_cog(Music(bot))
+
+default_config = {'prefix': '!', 'channel': 'None'}
+
+@bot.event
+async def on_guild_join(guild):
+    config = "configs/" + str(guild.id) + ".json"
+    if not(exists(config)):
+        with open(config, "w") as file:
+            json.dump(default_config, file, sort_keys=True, indent=4)
 
 
 @bot.event
 async def on_ready():
-    print("Logged in as:\n{0.user.name}\n{0.user.id}".format(bot))
-    await bot.change_presence(activity=discord.Game("Made by Swiftzerr"))
+    print("\n\n\nLogged in as:\n{0.user.name}\n{0.user.id}".format(bot))
+    await bot.change_presence(activity=discord.Game("Made by grayhawk25"))
 
 bot.run("NzU1ODUwMzk0NTc5NTAxMTU5.X2JSiQ.X0kCbDgZV3t2VwwJ5OpASU0M2xY")
