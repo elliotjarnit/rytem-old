@@ -588,4 +588,4 @@ async def on_ready():
     print("\n\n\nLogged in as:\n{0.user.name}\n{0.user.id}".format(bot))
     await bot.change_presence(activity=discord.Game("Made by grayhawk25"))
 
-bot.run("NzU1ODUwMzk0NTc5NTAxMTU5.X2JSiQ.X0kCbDgZV3t2VwwJ5OpASU0M2xY")
+bot.run("TOKEN HERE")
